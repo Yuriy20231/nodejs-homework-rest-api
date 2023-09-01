@@ -8,7 +8,6 @@ const { schemas } = require("../../models/user");
 
 const router = express.Router();
 
-// updateSubscription
 
 router.patch("/", authenticate, validateBody(schemas.updateSubscription), ctrl.updateSubscription)
 
