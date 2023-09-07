@@ -1,27 +1,41 @@
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken')
- 
-// імпортую модель
+
+const gravatar = require('gravatar') 
+const path = require("path");
+const fs = require("fs/promises")
+const Jimp = require ("jimp")
+
+
 const { User } = require("../models/user");
-// обробник помилок і обгортка для try&catch
+
 const { HttpError, ctrlWrapper } = require("../helpers");
-// витягую секрет з .env
+
+
+
 const { SECRET_KEY } = process.env;
 
-// запит реєстрації
+
+const avatarDir = path.join(__dirname, "../", "public", "avatars");
+
+
 const register = async (req, res) => {
-    // з реквеста отримую емейл та пароль
+
     const { email, password } = req.body;
-// відправляю запит на mongoDB та перевіряю чи є така пошта
+
     const user = await User.findOne({email});
     if (user) {
         throw HttpError(409, "Email already in use");
     }
-    // якщо немає хешую пароль
+
     const hashPassword = await bcrypt.hash(password, 10);
-    // стоврюю нового Юзера з мейлом та хешованим паролем
-    const newUser = await User.create({...req.body, password: hashPassword})
-    // відправляю відповідь, що користувач створений
+
+
+    const avatarUrl = gravatar.url(email)
+
+    const newUser = await User.create({...req.body, password: hashPassword, avatarUrl})
+
+
     res.status(201).json({
         email: newUser.email
     })
@@ -34,18 +48,19 @@ const login = async(req, res) => {
     if (!user) {
         throw HttpError(401, "Email or password invalid");  
     }
-    // переверію правильність захешованого пароля з введеним паролем
+
     const passwordCompare = await bcrypt.compare(password, user.password);
     if (!passwordCompare) {
         throw HttpError(401, "Email or password invalid");          
     }
 
     const payload = {id: user._id}
-    // створюю токен    
+   
     const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "23h" });
-    // записую токен до об"єкту
+   
     await User.findByIdAndUpdate(user._id, { token })
-    // повертаю токен
+   
+
     res.json({
         token: token,
     })
@@ -64,6 +79,32 @@ const logout = async (req, res) => {
 }
 
 
+const updateAvatar = async (req, res) => {
+    
+    const { _id } = req.user; 
+    const { path: tempUpload, originalname } = req.file;
+  
+    const image = await Jimp.read(tempUpload);
+    const newHeight = Jimp.AUTO;
+    await image.resize(250, newHeight).write(tempUpload);
+   
+    const fileName = `${_id}_${originalname}` 
+
+   
+    const resultUpload = path.join(avatarDir, fileName);
+  
+    await fs.rename(tempUpload, resultUpload);
+   
+    const avatarUrl = path.join("avatars", fileName);
+
+    await User.findByIdAndUpdate(_id, { avatarUrl });
+    
+    res.json(avatarUrl, )
+    
+
+}
+
+
 
 
 
@@ -72,5 +113,7 @@ module.exports = {
   login: ctrlWrapper(login),
   getCurrent: ctrlWrapper(getCurrent),
   logout: ctrlWrapper(logout),
- 
+
+  updateAvatar: ctrlWrapper(updateAvatar),
+
 };
