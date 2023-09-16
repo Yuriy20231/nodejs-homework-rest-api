@@ -1,5 +1,3 @@
-
-
 const { Contact } = require("../models/contacts");
 
 const { HttpError, ctrlWrapper } = require("../helpers");
@@ -7,14 +5,14 @@ const { HttpError, ctrlWrapper } = require("../helpers");
 const getAll = async (req, res) => {
   const { _id: owner } = req.user;  
   console.log(req.query);
-
+ 
   const { page = 1, limit = 5 } = req.query;
   const skip = (page-1)*limit
   const result = await Contact.find({ owner }, "-createdAt -updatedAt", {
     skip,
     limit,
   }).populate("owner", "email subscription");
-
+ 
   res.json(result);
 };
 
@@ -71,6 +69,7 @@ const renderHomepage = (req, res) => {
         <button type="submit">Register</button>
     </form>`);
 };
+
 
 
 module.exports = {

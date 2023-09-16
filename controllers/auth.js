@@ -21,51 +21,102 @@ const avatarDir = path.join(__dirname, "../", "public", "avatars");
 
 const register = async (req, res) => {
 
-    const { email, password } = req.body;
+ 
+  const { email, password } = req.body;
 
-    const user = await User.findOne({email});
-    if (user) {
-        throw HttpError(409, "Email already in use");
+  const user = await User.findOne({ email });
+  if (user) {
+    throw HttpError(409, "Email already in use");
+  }
+
+  const hashPassword = await bcrypt.hash(password, 10);
+
+ 
+  const avatarUrl = gravatar.url(email);
+
+  const verificationToken = nanoid();
+  
+  const newUser = await User.create({
+    ...req.body,
+    password: hashPassword,
+    avatarUrl,
+    verificationToken,
+  });
+ 
+  const verifyEmail = {
+    to: email,
+    subject: "verify email", 
+    html: `<a target="_blank" href="${BASE_URL}/api/auth/verify/${verificationToken}">Click for verify email</a>`,
+  };
+
+  await sendEmail(verifyEmail);
+
+
+  res.status(201).json({
+    email: newUser.email,
+  });
+};
+
+const verifyEmail = async (req, res) => {
+    const { verificationToken } = req.params;
+    console.log("verificationToken", verificationToken);
+
+    const user = await User.findOne({ verificationToken });
+    console.log("user", user);
+  
+  if (!user) {
+    throw HttpError(404, "User not found");
     }
+   
+    await User.findByIdAndUpdate(user._id, { verify: true, verificationToken: "" });
+    
+     res.status(200).json({
+       message: "Verification successful",
+     });
+}
 
-    const hashPassword = await bcrypt.hash(password, 10);
+const resendVerifyEmail = async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    throw HttpError(400, "missing required field email")
+  }
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw HttpError(401, "Email not found");
+  }
+  if (user.verify) {
+    throw HttpError(401, "Verification has already been passed");
+  }
 
+  const verifyEmail = {
+    to: email,
+    subject: "verify email",
+    html: `<a target="_blank" href="${BASE_URL}/api/auth/verify/${user.verificationToken}">Click for verify email</a>`,
+    };
 
-    const avatarUrl = gravatar.url(email)
-
-    const newUser = await User.create({...req.body, password: hashPassword, avatarUrl})
-
-
-    res.status(201).json({
-        email: newUser.email
-    })
     
 }
 
-const login = async(req, res) => {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) {
-        throw HttpError(401, "Email or password invalid");  
-    }
 
-    const passwordCompare = await bcrypt.compare(password, user.password);
-    if (!passwordCompare) {
-        throw HttpError(401, "Email or password invalid");          
-    }
+ 
+   res.status(200).body({ email: email }).json({
+     message: "Verification email sent",
+   });
+
+
 
     const payload = {id: user._id}
    
     const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "23h" });
-   
+    
     await User.findByIdAndUpdate(user._id, { token })
-   
+    
 
     res.json({
         token: token,
     })
 
-}
+
 
 const getCurrent = async (req, res) => {
     const { email, subscription } = req.user;
@@ -83,20 +134,20 @@ const updateAvatar = async (req, res) => {
     
     const { _id } = req.user; 
     const { path: tempUpload, originalname } = req.file;
-  
+ 
     const image = await Jimp.read(tempUpload);
     const newHeight = Jimp.AUTO;
     await image.resize(250, newHeight).write(tempUpload);
-   
+    
     const fileName = `${_id}_${originalname}` 
 
    
     const resultUpload = path.join(avatarDir, fileName);
-  
-    await fs.rename(tempUpload, resultUpload);
    
+    await fs.rename(tempUpload, resultUpload);
+  
     const avatarUrl = path.join("avatars", fileName);
-
+  
     await User.findByIdAndUpdate(_id, { avatarUrl });
     
     res.json(avatarUrl, )

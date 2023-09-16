@@ -10,7 +10,7 @@ const usersRouter = require("./routes/api/users");
 const app = express();
 
 const formatsLogger = app.get("env") === "development" ? "dev" : "short";
-// app.set("view engine", "ejs");
+
 
 app.use(logger(formatsLogger));
 app.use(cors());
